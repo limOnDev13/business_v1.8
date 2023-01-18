@@ -1890,6 +1890,109 @@ class Business():
             print('maxExpenses = ', maxExpenses)
             print()
 
+    def find_break_even_point(self):
+        '''
+        self.totalBusinessPlan.append([endMonth, currentExpenses, self.totalExpenses,
+                                       currentRevenue, self.totalRevenue, self.totalExpensesReserve,
+                                       self.totalDepreciationReserve, self.totalExpansionReserve,
+                                       currentFamilyProfit, self.totalFamilyProfit,
+                                       taxInThisMonth, self.amount_cwsd])
+        '''
+        breakEvenPoint = 0
+        for i in range(len(self.totalBusinessPlan)):
+            cureExpenses = self.totalBusinessPlan[i][2] - self.cwsds[0].costCWSD
+            cureRevenue = self.totalBusinessPlan[i][4] - self.cwsds[0].grant - self.cwsds[0].principalDebt
+            if (cureExpenses <= cureRevenue):
+                flag = True
+                for j in range(i, len(self.totalBusinessPlan)):
+                    nextCureExpenses = self.totalBusinessPlan[j][2] - self.cwsds[0].costCWSD
+                    nextCureRevenue = self.totalBusinessPlan[j][4] - self.cwsds[0].grant - self.cwsds[0].principalDebt
+                    if (nextCureExpenses > nextCureRevenue):
+                        flag = False
+                        break
+
+                if (flag):
+                    breakEvenPoint = i
+                    break
+
+        return breakEvenPoint
+
+    def find_payback_period(self):
+        '''
+        self.totalBusinessPlan.append([endMonth, currentExpenses, self.totalExpenses,
+                                       currentRevenue, self.totalRevenue, self.totalExpensesReserve,
+                                       self.totalDepreciationReserve, self.totalExpansionReserve,
+                                       currentFamilyProfit, self.totalFamilyProfit,
+                                       taxInThisMonth, self.amount_cwsd])
+        '''
+        startCapital = self.cwsds[0].grant + self.cwsds[0].principalDebt
+        previousBudget = 0
+        resultPaybackPeriod = 0
+        for i in range(len(self.totalBusinessPlan)):
+            budget = self.totalBusinessPlan[i][4] - self.totalBusinessPlan[i][2]
+            if ((startCapital <= budget) and (previousBudget < budget)):
+                resultPaybackPeriod = i
+                break
+            else:
+                previousBudget = budget
+
+        return resultPaybackPeriod
+
+    def draw_revenue_and_expenses(self):
+        '''
+        self.totalBusinessPlan.append([endMonth, currentExpenses, self.totalExpenses,
+                                       currentRevenue, self.totalRevenue, self.totalExpensesReserve,
+                                       self.totalDepreciationReserve, self.totalExpansionReserve,
+                                       currentFamilyProfit, self.totalFamilyProfit,
+                                       taxInThisMonth, self.amount_cwsd])
+        '''
+        x = np.linspace(0, len(self.totalBusinessPlan), len(self.totalBusinessPlan))
+        y_expenses = list()
+        y_revenue = list()
+        for i in range(len(self.totalBusinessPlan)):
+            y_expenses.append(self.totalBusinessPlan[i][2])
+            y_revenue.append(self.totalBusinessPlan[i][4])
+
+        plt.grid()
+        plt.plot(x, y_revenue, x, y_expenses)
+        plt.show()
+
+    def draw_cure_revenue_and_expenses(self):
+        '''
+        self.totalBusinessPlan.append([0 - endMonth, 1 - currentExpenses, 2 - self.totalExpenses,
+                                       3 - currentRevenue, 4 - self.totalRevenue, 5 - self.totalExpensesReserve,
+                                       6 - self.totalDepreciationReserve, 7 - self.totalExpansionReserve,
+                                       8 - currentFamilyProfit, 9 - self.totalFamilyProfit,
+                                       10 - taxInThisMonth, 11 - self.amount_cwsd])
+        '''
+        x = np.linspace(0, len(self.totalBusinessPlan), len(self.totalBusinessPlan))
+        y_expenses = list()
+        y_revenue = list()
+        for i in range(len(self.totalBusinessPlan)):
+            y_expenses.append(self.totalBusinessPlan[i][2] - self.totalBusinessPlan[i][11] * self.cwsds[0].costCWSD)
+            y_revenue.append(self.totalBusinessPlan[i][4] - self.cwsds[0].grant - self.cwsds[0].principalDebt)
+
+        plt.grid()
+        plt.plot(x, y_revenue, x, y_expenses)
+        plt.show()
+
+    def draw_dynamics_budget(self):
+        '''
+        self.totalBusinessPlan.append([0 - endMonth, 1 - currentExpenses, 2 - self.totalExpenses,
+                                       3 - currentRevenue, 4 - self.totalRevenue, 5 - self.totalExpensesReserve,
+                                       6 - self.totalDepreciationReserve, 7 - self.totalExpansionReserve,
+                                       8 - currentFamilyProfit, 9 - self.totalFamilyProfit,
+                                       10 - taxInThisMonth, 11 - self.amount_cwsd])
+        '''
+        x = np.linspace(0, len(self.totalBusinessPlan), len(self.totalBusinessPlan))
+        y = list()
+        for i in range(len(self.totalBusinessPlan)):
+            budget = self.totalBusinessPlan[i][4] - self.totalBusinessPlan[i][2]
+            y.append(budget)
+
+        plt.grid()
+        plt.plot(x, y)
+        plt.show()
 
 class NewOptimization():
     def calculate_optimized_amount_fish_in_commercial_pool(self, square, mass,
@@ -2042,7 +2145,7 @@ feedRatio = 1.5
 mainVolumeFish = 850
 
 startDate = date.date.today()
-endDate = date.date(startDate.year + 50, startDate.month, startDate.day)
+endDate = date.date(startDate.year + 5, startDate.month, startDate.day)
 reserve = 50
 deltaMass = 50
 minMass = 20
@@ -2057,6 +2160,14 @@ business.main_script1_with_correction_factor_and_with_tax(startDate, endDate, re
 business.print_detailed_info()
 business.calculate_mass_fries_and_sold_fish()
 business.annual_business_plan()
+breakEventPoint = business.find_break_even_point()
+paybackPeriod = business.find_payback_period()
+print()
+print('Точка безубыточности: ', breakEventPoint, ' месяцев')
+print('Период окупаемости: ', paybackPeriod, ' месяцев')
+business.draw_revenue_and_expenses()
+business.draw_cure_revenue_and_expenses()
+business.draw_dynamics_budget()
 '''
 newOptimization = NewOptimization()
 result = newOptimization.total_optimization(500000, 50000, 1000000, 100, 10, 350,
