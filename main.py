@@ -751,17 +751,21 @@ class CWSD():
     # массивы с основной информацией
     feedings = list()
     fries = list()
+    amountsFriers = list()
     massFriers = list()
+    massSoldFishes = list()
     salaries = list()
     rents = list()
     electricities = list()
     revenues = list()
     resultBusinessPlan = list()
     resultBusinessPlanEveryMonth = list()
+    resultMassArrays = list()
 
     # изменяемые в ходе работы параметры
     haveReservesBeenFilled = False
     monthlyPayment = 0
+    totalCreditPayment = 0
     howMuchIsMissing = 0
 
     def __init__(self, masses, mainVolumeFish, amountModules=2, amountPools=4, square=10,
@@ -794,6 +798,8 @@ class CWSD():
         self.costCWSD = costCWSD
         self.depreciationReserve = 0
         self.expansionReserve = 0
+        self.monthlyPayment = 0
+        self.totalCreditPayment = 0
         self.principalDebt = principalDebt
         self.annualPercentage = annualPercentage
         self.amountMonth = amountMonth
@@ -802,12 +808,16 @@ class CWSD():
 
         self.feedings = list()
         self.fries = list()
+        self.amountsFriers = list()
+        self.massFriers = list()
+        self.massSoldFishes = list()
         self.salaries = list()
         self.rents = list()
         self.electricities = list()
         self.revenues = list()
         self.resultBusinessPlan = list()
         self.resultBusinessPlanEveryMonth = list()
+        self.resultMassArrays = list()
 
     def _calculate_all_casts_and_profits_for_all_period(self, startDate, endDate):
         for i in range(self.amountModules):
@@ -820,10 +830,17 @@ class CWSD():
                     # [date, amountFishes, averageMass, totalPrice]
                     self.fries.append([self.modules[i].pools[j].arrayFryPurchases[k][0],
                                       self.modules[i].pools[j].arrayFryPurchases[k][3]])
+                    self.massFriers.append([self.modules[i].pools[j].arrayFryPurchases[k][0],
+                                            self.modules[i].pools[j].arrayFryPurchases[k][1] *
+                                            self.modules[i].pools[j].arrayFryPurchases[k][2] / 1000])
+                    self.amountsFriers.append([self.modules[i].pools[j].arrayFryPurchases[k][0],
+                                               self.modules[i].pools[j].arrayFryPurchases[k][1]])
                 for k in range(len(self.modules[i].pools[j].arraySoldFish)):
                     # [day, amountSoldFish, soldBiomass, revenue]
                     self.revenues.append([self.modules[i].pools[j].arraySoldFish[k][0],
                                           self.modules[i].pools[j].arraySoldFish[k][3]])
+                    self.massSoldFishes.append([self.modules[i].pools[j].arraySoldFish[k][0],
+                                                self.modules[i].pools[j].arraySoldFish[k][2]])
 
         startMonth = startDate
         endMonth = calculate_end_date_of_month(startMonth) - date.timedelta(1)
@@ -1061,8 +1078,10 @@ class CWSD():
             annuityRatio /= (1 + monthlyPercentage) ** self.amountMonth - 1
             monthlyPayment = self.principalDebt * annuityRatio
             self.monthlyPayment = monthlyPayment
+            self.totalCreditPayment = self.monthlyPayment * self.amountMonth
         else:
             self.monthlyPayment = 0
+            self.totalCreditPayment = 0
 
     def calculate_cost_launching_new_cwsd(self, startDate):
         self.calculate_monthly_loan_payment()
@@ -1114,6 +1133,16 @@ class CWSD():
         item.append(self.depreciationReserve)
         item.append(self.expansionReserve)
         item.append(currentFamilySalary)
+
+        massItem = [endMonth]
+        amountFries = self._find_events_in_this_period(self.amountsFriers, startMonth, endMonth)
+        massItem.append(amountFries)
+        biomassFries = self._find_events_in_this_period(self.massFriers, startMonth, endMonth)
+        massItem.append(biomassFries)
+        biomassSoldFish = self._find_events_in_this_period(self.massSoldFishes, startMonth, endMonth)
+        massItem.append(biomassSoldFish)
+        # massItem = [endMonth, amountFries, biomassFries, biomassSoldFish]
+        self.resultMassArrays.append(massItem)
 
         # item = [конец этого месяца, средства на резерве для расходов с предыдущего месяца,
         #         траты на малька, на корм, на зарплату, на ренту, на электричество, месячная плата по кредиту
@@ -1310,67 +1339,6 @@ class Business():
 
         return result
 
-    def calculate_total_business_plan_without_goal(self, startDate, endDate, startNumberMonth, startMaxGeneralExpenses,
-                                                   minSalary, limitSalary):
-        startMonth = startDate
-        endMonth = calculate_end_date_of_month(startMonth)
-        currentNumberMonth = startNumberMonth
-        currentMaxGeneralExpenses = startMaxGeneralExpenses
-
-
-        # check_calculate_businessPlan_on_one_month(self, startDate, endDate, minSalary, limitSalary)
-        while (endMonth <= endDate):
-            currentExpenses = 0
-            currentRevenue = 0
-            currentExpensesReserve = 0
-            currentDepreciationReserve = 0
-            currentExpansionReserve = 0
-            currentFamilyProfit = 0
-
-            for i in range(self.amount_cwsd):
-                if (currentNumberMonth <= self.cwsds[i].amountMonth):
-                    payForLoan = True
-                else:
-                    payForLoan = False
-
-                currentMaxGeneralExpenses = self.cwsds[i].calculate_businessPlan_on_one_month(startMonth, minSalary,
-                                                                              limitSalary, payForLoan,
-                                                                              currentMaxGeneralExpenses)
-
-                item = self._find_info_in_this_date(self.cwsds[i].resultBusinessPlanEveryMonth, endMonth)
-                # item = [0 -конец этого месяца, 1 - средства на резерве для расходов с предыдущего месяца,
-                #         2 - траты на малька, 3 - на корм, 4 - на зарплату, 5 - на ренту,
-                #         6 - на электричество, 7 - месячная плата по кредиту
-                #         8 - суммарные расходы, 9 - выручка, 10 - бюджет, 11 - обновленный резерв на траты,
-                #         12 - обновленный резерв на амортизацию, 13 - обновленный резерв на расширение,
-                #         14 - зарплата семье в этом месяце]
-                currentExpenses += item[8]
-                currentRevenue += item[9]
-                currentExpensesReserve += item[11]
-                currentDepreciationReserve += item[12]
-                currentExpansionReserve += item[13]
-                currentFamilyProfit += item[14]
-
-            self.totalExpenses += currentExpenses
-            self.totalRevenue += currentRevenue
-            self.totalExpensesReserve = currentExpensesReserve
-            self.totalDepreciationReserve = currentDepreciationReserve
-            self.totalExpansionReserve = currentExpansionReserve
-            self.totalFamilyProfit += currentFamilyProfit
-            x = self.totalRevenue - self.totalExpenses - self.totalExpensesReserve -\
-                self.totalDepreciationReserve - self.totalFamilyProfit
-
-            self.totalBusinessPlan.append([endMonth, currentExpenses, self.totalExpenses,
-                                           currentRevenue, self.totalRevenue, self.totalExpensesReserve,
-                                           self.totalDepreciationReserve, self.totalExpansionReserve,
-                                           currentFamilyProfit, self.totalFamilyProfit])
-
-            currentNumberMonth += 1
-            startMonth = endMonth
-            endMonth = calculate_end_date_of_month(startMonth)
-
-        return [startMonth, currentNumberMonth, currentMaxGeneralExpenses]
-
     def update_all_reserves(self):
         self.totalExpansionReserve = 0
         self.totalDepreciationReserve = 0
@@ -1379,69 +1347,6 @@ class Business():
             self.totalExpansionReserve += self.cwsds[i].expansionReserve
             self.totalDepreciationReserve += self.cwsds[i].depreciationReserve
             self.totalExpensesReserve += self.cwsds[i].expensesReserve
-
-    def calculate_total_business_plan_with_goal(self, startDate, endDate,
-                                                startNumberMonth, startMaxGeneralExpenses, goalExpansion,
-                                                minSalary, limitSalary):
-        startMonth = startDate
-        endMonth = calculate_end_date_of_month(startMonth)
-        currentNumberMonth = startNumberMonth
-        currentMaxGeneralExpenses = startMaxGeneralExpenses
-
-        # check_calculate_businessPlan_on_one_month(self, startDate, endDate, minSalary, limitSalary)
-        while ((endMonth <= endDate) and (self.totalExpansionReserve < goalExpansion)):
-            currentExpenses = 0
-            currentRevenue = 0
-            currentExpensesReserve = 0
-            currentDepreciationReserve = 0
-            currentExpansionReserve = 0
-            currentFamilyProfit = 0
-
-            for i in range(self.amount_cwsd):
-                if (currentNumberMonth <= self.cwsds[i].amountMonth):
-                    payForLoan = True
-                else:
-                    payForLoan = False
-
-                currentMaxGeneralExpenses = self.cwsds[i].calculate_businessPlan_on_one_month(startMonth, minSalary,
-                                                                                              limitSalary, payForLoan,
-                                                                                              currentMaxGeneralExpenses)
-
-                item = self._find_info_in_this_date(self.cwsds[i].resultBusinessPlanEveryMonth, endMonth)
-                # item = [0 -конец этого месяца, 1 - средства на резерве для расходов с предыдущего месяца,
-                #         2 - траты на малька, 3 - на корм, 4 - на зарплату, 5 - на ренту,
-                #         6 - на электричество, 7 - месячная плата по кредиту
-                #         8 - суммарные расходы, 9 - выручка, 10 - бюджет, 11 - обновленный резерв на траты,
-                #         12 - обновленный резерв на амортизацию, 13 - обновленный резерв на расширение,
-                #         14 - зарплата семье в этом месяце]
-                currentExpenses += item[8]
-                currentRevenue += item[9]
-                currentExpensesReserve += item[11]
-                currentDepreciationReserve += item[12]
-                currentExpansionReserve += item[13]
-                currentFamilyProfit += item[14]
-
-            self.totalExpenses += currentExpenses
-            self.totalRevenue += currentRevenue
-            self.totalExpensesReserve = currentExpensesReserve
-            self.totalDepreciationReserve = currentDepreciationReserve
-            self.totalExpansionReserve = currentExpansionReserve
-            self.totalFamilyProfit += currentFamilyProfit
-            self.totalBusinessPlan.append([endMonth, currentExpenses, self.totalExpenses,
-                                           currentRevenue, self.totalRevenue, self.totalExpensesReserve,
-                                           self.totalDepreciationReserve, self.totalExpansionReserve,
-                                           currentFamilyProfit, self.totalFamilyProfit])
-
-            currentNumberMonth += 1
-            startMonth = endMonth
-            endMonth = calculate_end_date_of_month(startMonth)
-
-        if (self.totalExpansionReserve >= goalExpansion):
-            hasGoalBeenAchieved = True
-        else:
-            hasGoalBeenAchieved = False
-
-        return [startMonth, currentNumberMonth, currentMaxGeneralExpenses, hasGoalBeenAchieved]
 
     def calculate_tax(self, currentMonth):
         # функция будет рассчитывать, какой налог нужно заплатить в этом месяце и
@@ -1595,7 +1500,8 @@ class Business():
             self.totalBusinessPlan.append([endMonth, currentExpenses, self.totalExpenses,
                                            currentRevenue, self.totalRevenue, self.totalExpensesReserve,
                                            self.totalDepreciationReserve, self.totalExpansionReserve,
-                                           currentFamilyProfit, self.totalFamilyProfit, taxInThisMonth])
+                                           currentFamilyProfit, self.totalFamilyProfit,
+                                           taxInThisMonth, self.amount_cwsd])
 
             currentNumberMonth += 1
             startMonth = endMonth
@@ -1670,7 +1576,8 @@ class Business():
             self.totalBusinessPlan.append([endMonth, currentExpenses, self.totalExpenses,
                                            currentRevenue, self.totalRevenue, self.totalExpensesReserve,
                                            self.totalDepreciationReserve, self.totalExpansionReserve,
-                                           currentFamilyProfit, self.totalFamilyProfit, taxInThisMonth])
+                                           currentFamilyProfit, self.totalFamilyProfit,
+                                           taxInThisMonth, self.amount_cwsd])
 
             currentNumberMonth += 1
             startMonth = endMonth
@@ -1741,57 +1648,6 @@ class Business():
             x = costNewCWSD * reserves[i] / sum
             self.cwsds[i].expansionReserve -= x
             self.totalExpansionReserve -= x
-
-    def _script_with_goal(self, startDate, endDate, startNumberMonth, startMaxGeneralExpenses,
-                         costNewCWSD, expansionCushion, minSalary, limitSalary):
-        resultBeforeStartingNew_cwsd = self.calculate_total_business_plan_with_goal(startDate,
-                                                                                    endDate,
-                                                                                    startNumberMonth,
-                                                                                    startMaxGeneralExpenses,
-                                                                                    costNewCWSD + expansionCushion,
-                                                                                    minSalary, limitSalary)
-
-        dateBeginingSecondCWSD = resultBeforeStartingNew_cwsd[0]
-        monthBeginingSecondCWSD = resultBeforeStartingNew_cwsd[1]
-        currentMaxGeneralExpenses = resultBeforeStartingNew_cwsd[2]
-        canStartNewCWSD = resultBeforeStartingNew_cwsd[3]
-
-        return [canStartNewCWSD, dateBeginingSecondCWSD, monthBeginingSecondCWSD, currentMaxGeneralExpenses]
-
-    def main_script1_with_correction_factor(self, startDate, endDate, reserve,
-                                           deltaMass, minMass, maxMass, costNewCWSD,
-                                           expansionCushion, mainVolume, minSalary, limitSalary):
-        self.cwsds[0].work_cwsd_with_correction_factor(startDate, endDate, reserve, deltaMass, minMass, maxMass)
-
-        firstResult = self._script_with_goal(startDate, endDate, 1, 0,
-                                             costNewCWSD, expansionCushion, minSalary, limitSalary)
-        if (firstResult[0]):
-            # [canStartNewCWSD, dateBeginingSecondCWSD, monthBeginingSecondCWSD, currentMaxGeneralExpenses]
-            print(firstResult[1], ' ', firstResult[2],
-                  ' месяц - на РДР накопилось достаточно для запуска нового узв')
-            self._controller_reserves_when_add_new_cwsd(costNewCWSD, expansionCushion)
-            parametersNew_cwsd = [[10, 0], [11, 0], [12, 0], [13, costNewCWSD]]
-            self.add_new_cwsd(mainVolume, parametersNew_cwsd)
-            self.cwsds[1].work_cwsd_with_correction_factor(firstResult[1], endDate, reserve,
-                                                           deltaMass, minMass, maxMass)
-
-            secondResult = self._script_with_goal(firstResult[1], endDate, firstResult[2], firstResult[3],
-                                                 costNewCWSD, expansionCushion, minSalary, limitSalary)
-
-            if (secondResult[0]):
-                print(secondResult[1], ' ', secondResult[2],
-                      ' месяц - на РДР накопилось достаточно для запуска нового узв')
-                self._controller_reserves_when_add_new_cwsd(costNewCWSD, expansionCushion)
-                parametersNew_cwsd = [[10, 0], [11, 0], [12, 0], [13, costNewCWSD]]
-                self.add_new_cwsd(mainVolume, parametersNew_cwsd)
-                self.cwsds[2].work_cwsd_with_correction_factor(secondResult[1], endDate, reserve,
-                                                               deltaMass, minMass, maxMass)
-                self.calculate_total_business_plan_without_goal(secondResult[1], endDate, secondResult[2],
-                                                                secondResult[3], minSalary, limitSalary)
-            else:
-                print('Третье узв поставить не успели')
-        else:
-            print('Второе узв поставить не успели')
 
     def print_final_info(self):
         '''
@@ -1885,6 +1741,154 @@ class Business():
                 result = [True, currentBudget]
 
         return result
+
+    def calculate_mass_fries_and_sold_fish(self):
+        resultArray = list()
+        totalResultAmountFries = 0
+        totalResultBiomassFries = 0
+        totalResultBiomassSoldFish = 0
+        for i in range(len(self.cwsds[0].resultMassArrays)):
+            resultAmountFries = 0
+            resultBiomassFries = 0
+            resultBiomassSoldFish = 0
+            date = self.cwsds[0].resultMassArrays[i][0]
+            for j in range(self.amount_cwsd):
+                # massItem = [endMonth, amountFries, biomassFries, biomassSoldFish]
+                item = self._find_info_in_this_date(self.cwsds[j].resultMassArrays,
+                                                    self.cwsds[0].resultMassArrays[i][0])
+                if (item != None):
+                    resultAmountFries += item[1]
+                    resultBiomassFries += item[2]
+                    resultBiomassSoldFish += item[3]
+
+            totalResultAmountFries += resultAmountFries
+            totalResultBiomassFries += resultBiomassFries
+            totalResultBiomassSoldFish += resultBiomassSoldFish
+
+            resultArray.append([date, resultAmountFries, resultBiomassFries, resultBiomassSoldFish,
+                                totalResultAmountFries, totalResultBiomassFries, totalResultBiomassSoldFish])
+
+        for i in range(len(resultArray)):
+            print('Дата: ', resultArray[i][0])
+            print('Количество купленных мальков в этом месяце: ', resultArray[i][1])
+            print('Биомасса купленных мальков в этом месяце: ', resultArray[i][2])
+            print('Биомасса проданной рыбы в этом месяце: ', resultArray[i][3])
+            print('Количество купленных мальков за все время: ', resultArray[i][4])
+            print('Биомасса купленных мальков за все время: ', resultArray[i][5])
+            print('Биомасса проданной рыбы за все время: ', resultArray[i][6])
+            print('==================================================================================')
+            print()
+
+    def annual_business_plan(self):
+        '''
+        self.totalBusinessPlan.append([0 - endMonth, 1 - currentExpenses, 2 - self.totalExpenses,
+                                       3 - currentRevenue, 4 - self.totalRevenue, 5 - self.totalExpensesReserve,
+                                       6 - self.totalDepreciationReserve, 7 - self.totalExpansionReserve,
+                                       8 - currentFamilyProfit, 9 - self.totalFamilyProfit,
+                                       10 - taxInThisMonth, 11 - self.amount_cwsd])
+        '''
+        yearNumber = 0
+        previousAnnualRevenue = 0
+        previousAnnualRevenueWithoutExternalSources = 0
+        previousAnnualExpenses = 0
+        previousAnnualExpensesRelatedOnlyToCostPrice = 0
+        previousFamilyProfit = 0
+        annualCreditPayment = 0
+        creditMonths = self.cwsds[0].amountMonth
+        minRevenue = 100000000
+        maxRevenue = 0
+        averageRevenue = 0
+        minExpenses = 100000000
+        maxExpenses = 0
+        averageExpenses = 0
+        amountAverage = 0
+
+        resultAnnualBusinessPlan = list()
+
+        for i in range(len(self.totalBusinessPlan)):
+            if (i < creditMonths):
+                annualCreditPayment += self.cwsds[0].monthlyPayment
+
+            if ((i + 1) % 12 == 0):
+                annualRevenueWithoutExternalSources = self.totalBusinessPlan[i][4] -\
+                                                      self.cwsds[0].grant - self.cwsds[0].principalDebt
+                annualRevenue = self.totalBusinessPlan[i][4]
+                annualExpensesRelatedOnlyToCostPrice = self.totalBusinessPlan[i][2] -\
+                                                       annualCreditPayment -\
+                                                       self.totalBusinessPlan[i][11] * self.cwsds[0].costCWSD
+                annualExpenses = self.totalBusinessPlan[i][2]
+                annualFamilyProfit = self.totalBusinessPlan[i][9]
+
+                annualRevenueWithoutExternalSources -= previousAnnualRevenueWithoutExternalSources
+                annualRevenue -= previousAnnualRevenue
+                annualExpensesRelatedOnlyToCostPrice -= previousAnnualExpensesRelatedOnlyToCostPrice
+                annualExpenses -= previousAnnualExpenses
+                annualFamilyProfit -= previousFamilyProfit
+                annualProfit = annualRevenue - annualExpenses
+                annualProfitSales = annualRevenueWithoutExternalSources - annualExpensesRelatedOnlyToCostPrice
+                returnOnSales = annualProfitSales / annualRevenueWithoutExternalSources * 100
+                returnOnBusiness = annualProfit / annualRevenue * 100
+
+                previousAnnualRevenueWithoutExternalSources += annualRevenueWithoutExternalSources
+                previousAnnualRevenue += annualRevenue
+                previousAnnualExpensesRelatedOnlyToCostPrice += annualExpensesRelatedOnlyToCostPrice
+                previousAnnualExpenses += annualExpenses
+                previousFamilyProfit += annualFamilyProfit
+
+                resultAnnualBusinessPlan.append([yearNumber, annualRevenue, annualExpenses, annualProfit,
+                                                 annualFamilyProfit,
+                                                 annualRevenueWithoutExternalSources,
+                                                 annualExpensesRelatedOnlyToCostPrice,
+                                                 returnOnSales, returnOnBusiness, annualProfitSales])
+
+                if (yearNumber >= 4):
+                    averageRevenue += annualRevenue
+                    averageExpenses += annualExpenses
+                    amountAverage += 1
+
+                    if (minRevenue > annualRevenue):
+                        minRevenue = annualRevenue
+                    if (maxRevenue < annualRevenue):
+                        maxRevenue = annualRevenue
+                    if (minExpenses > annualExpenses):
+                        minExpenses = annualExpenses
+                    if (maxExpenses < annualExpenses):
+                        maxExpenses = annualExpenses
+
+                yearNumber += 1
+
+                annualCreditPayment = 0
+
+        averageRevenue /= amountAverage
+        averageExpenses /= amountAverage
+
+        for i in range(len(resultAnnualBusinessPlan)):
+            print('=================================================')
+            '''
+            resultAnnualBusinessPlan.append([0 - yearNumber, 1 - annualRevenue, 2 - annualExpenses, 3 - annualProfit,
+                                             4 - annualFamilyProfit,
+                                             5 - annualRevenueWithoutExternalSources,
+                                             6 - previousAnnualExpensesRelatedOnlyToCostPrice,
+                                             7 - returnOnSales, 8 - returnOnBusiness])
+            '''
+            print('year = ', resultAnnualBusinessPlan[i][0])
+            print('annualRevenue = ', resultAnnualBusinessPlan[i][1])
+            print('annualRevenueWithoutExternalSources = ', resultAnnualBusinessPlan[i][5])
+            print('annualExpenses = ', resultAnnualBusinessPlan[i][2])
+            print('annualExpensesRelatedOnlyToCostPrice = ', resultAnnualBusinessPlan[i][6])
+            print('annualProfit = ', resultAnnualBusinessPlan[i][3])
+            print('annualFamilyProfit = ', resultAnnualBusinessPlan[i][4])
+            print('returnOnSales = ', resultAnnualBusinessPlan[i][7])
+            print('returnOnBusiness = ', resultAnnualBusinessPlan[i][8])
+            print('annualProfitSales = ', resultAnnualBusinessPlan[i][9])
+            print()
+            print('minRevenue = ', minRevenue)
+            print('averageRevenue = ', averageRevenue)
+            print('maxRevenue = ', maxRevenue)
+            print('minExpenses = ', minExpenses)
+            print('averageExpenses = ', averageExpenses)
+            print('maxExpenses = ', maxExpenses)
+            print()
 
 
 class NewOptimization():
@@ -2038,7 +2042,7 @@ feedRatio = 1.5
 mainVolumeFish = 850
 
 startDate = date.date.today()
-endDate = date.date(startDate.year + 5, startDate.month, startDate.day)
+endDate = date.date(startDate.year + 50, startDate.month, startDate.day)
 reserve = 50
 deltaMass = 50
 minMass = 20
@@ -2051,6 +2055,8 @@ business.main_script1_with_correction_factor_and_with_tax(startDate, endDate, re
                                                           maxMass, 4600000, 200000, mainVolumeFish,
                                                           100000, 200000)
 business.print_detailed_info()
+business.calculate_mass_fries_and_sold_fish()
+business.annual_business_plan()
 '''
 newOptimization = NewOptimization()
 result = newOptimization.total_optimization(500000, 50000, 1000000, 100, 10, 350,
